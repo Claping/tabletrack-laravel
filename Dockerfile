@@ -28,26 +28,34 @@ RUN apt-get update && apt-get install -y \
 # -----------------------------
 WORKDIR /app
 
-# BUST de caché (cambia el valor si hace falta para forzar rebuild)
-ARG CACHEBUST=2025-09-06-02-10
+# BUST de caché (cámbialo si necesitas forzar rebuild)
+ARG CACHEBUST=2025-09-06-02-20
 RUN echo "CACHEBUST=$CACHEBUST"
 
-# 👇 Copiamos explícitamente .env.example ANTES del COPY global (evita caché)
+# Copiamos .env.example explícitamente para evitar caché del COPY global
 COPY .env.example .env.example
 
-# Copiamos el resto del proyecto (si esta capa se cachea, ya tenemos el .env.example garantizado arriba)
+# Copiamos el resto del proyecto
 COPY . .
 
 # .env: si existe .env.example lo usamos; si no, creamos uno mínimo
 RUN if [ -f .env.example ]; then cp .env.example .env; \
     else echo -e "APP_NAME=Laravel\nAPP_ENV=local\nAPP_KEY=\nAPP_DEBUG=true\nAPP_URL=http://localhost" > .env; fi
 
-# Bootstrap cache
-RUN mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache
+# Crear ESTRUCTURA de cache y dar permisos (esto resuelve "valid cache path")
+RUN mkdir -p \
+      bootstrap/cache \
+      storage/framework/cache/data \
+      storage/framework/sessions \
+      storage/framework/views \
+      storage/logs \
+ && chmod -R 775 bootstrap/cache storage \
+ && chown -R www-data:www-data bootstrap/cache storage || true
 
 # -----------------------------
 # Composer (prod) + APP_KEY
 # -----------------------------
+ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
  && composer install --no-dev --optimize-autoloader \
  && php artisan key:generate
