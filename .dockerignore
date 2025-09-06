@@ -1,10 +1,28 @@
-node_modules
-vendor
-storage/logs
-storage/framework
-.env
-.env.example
+cat > .dockerignore <<'EOF'
+# Dependencias y artefactos que no se deben enviar al build
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*
+!/storage/.gitignore
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+
+# Git y varios
 .git
+.gitignore
+Dockerfile*
+
+# Archivos de entorno: NO subir .env reales, pero SÍ .env.example
+.env
+.env.*
+!.env.example
+
+# Otros temporales
 *.log
-*.zip
-*.mp4
+npm-debug.log
+yarn-error.log
+.DS_Store
+EOF
