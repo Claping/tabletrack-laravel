@@ -1,21 +1,6 @@
-# -----------------------------
-# 1) Construir assets con Node
-# -----------------------------
-FROM node:18-alpine AS nodebuild
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY vite.config.js tailwind.config.js postcss.config.js ./
-COPY resources ./resources
-COPY public ./public
-RUN npm run build
-
-# -----------------------------
-# 2) Imagen de PHP (Laravel)
-# -----------------------------
 FROM php:8.2-cli
 
-# Sistema + extensiones PHP
+# SO + extensiones
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libicu-dev libpng-dev libjpeg-dev libonig-dev libxml2-dev libfreetype6-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -24,29 +9,35 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Código y assets compilados
-COPY . .
-COPY --from=nodebuild /app/public/build /app/public/build
+# (Opcional) bust de caché para forzar copia fresca
+RUN echo "CACHEBUST=2025-09-06-02-40"
 
-# .env base si no existe
+# Copiamos primero composer.* para aprovechar cache de dependencias
+COPY composer.json composer.lock ./
+
+# **Crear rutas de cache ANTES del composer install**
+RUN mkdir -p bootstrap/cache \
+    && mkdir -p storage/framework/{cache,data,sessions,testing,views} \
+    && chmod -R 775 bootstrap/cache storage
+
+# Instalar composer y dependencias **sin scripts** (evita package:discover en build)
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+ && composer install --no-dev --optimize-autoloader --no-scripts
+
+# Copia del resto del código
+COPY . .
+
+# Si tienes build de assets con Node/Vite, déjalo como lo tenías (etapa node) o elimina esa parte si no la usas.
+
+# .env de respaldo si hiciera falta en runtime (el instalador lo ajusta)
 RUN if [ ! -f .env ]; then \
       if [ -f .env.example ]; then cp .env.example .env; \
-      else echo -e "APP_NAME=Laravel\nAPP_ENV=production\nAPP_KEY=\nAPP_DEBUG=false\nAPP_URL=http://localhost" > .env; fi \
-    ; fi
+      else printf "APP_NAME=Laravel\nAPP_ENV=production\nAPP_KEY=\nAPP_DEBUG=false\nAPP_URL=http://localhost\n" > .env; \
+      fi; \
+    fi
 
-# **Crear rutas de cache y logs ANTES de Composer**
-RUN mkdir -p bootstrap/cache \
-    storage/framework/{cache,sessions,views} \
-    storage/logs \
- && chmod -R 775 storage bootstrap/cache
+# Asegurar permisos finales por si la copia los cambió
+RUN chmod -R 775 bootstrap/cache storage
 
-# Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
- && composer install --no-dev --optimize-autoloader
-
-# Ajustes post-install (no fallar si ya están hechos)
-RUN php artisan key:generate --force || true
-RUN php artisan storage:link || true
-
-EXPOSE 8000
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# Servir
+CMD ["php","artisan","serve","--host=0.0.0.0","--port=8000"]
