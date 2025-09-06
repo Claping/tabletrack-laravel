@@ -4,6 +4,7 @@
       "COMPOSER_ALLOW_SUPERUSER": "1"
     },
     "commands": [
+      "mkdir -p bootstrap/cache",
       "composer install --no-dev --optimize-autoloader",
       "php artisan config:clear",
       "php artisan route:cache",
