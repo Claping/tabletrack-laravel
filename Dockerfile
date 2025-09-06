@@ -27,21 +27,23 @@ RUN apt-get update && apt-get install -y \
 # Código de la app
 # -----------------------------
 WORKDIR /app
-# Copiamos todo (puede quedar cacheado)
-COPY . .
-# Forzamos a copiar .env.example aunque haya caché en la capa anterior
+
+# BUST de caché (cambia el valor si hace falta para forzar rebuild)
+ARG CACHEBUST=2025-09-06-02-10
+RUN echo "CACHEBUST=$CACHEBUST"
+
+# 👇 Copiamos explícitamente .env.example ANTES del COPY global (evita caché)
 COPY .env.example .env.example
 
-# .env: si existe .env.example lo usamos; si no, creamos uno mínimo para que no falle el build
+# Copiamos el resto del proyecto (si esta capa se cachea, ya tenemos el .env.example garantizado arriba)
+COPY . .
+
+# .env: si existe .env.example lo usamos; si no, creamos uno mínimo
 RUN if [ -f .env.example ]; then cp .env.example .env; \
     else echo -e "APP_NAME=Laravel\nAPP_ENV=local\nAPP_KEY=\nAPP_DEBUG=true\nAPP_URL=http://localhost" > .env; fi
 
 # Bootstrap cache
 RUN mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache
-
-# BUST de caché para obligar a reconstruir capas cuando lo necesitemos (cambia el valor si hace falta)
-ARG CACHEBUST=2025-09-06-02-05
-RUN echo "CACHEBUST=$CACHEBUST"
 
 # -----------------------------
 # Composer (prod) + APP_KEY
