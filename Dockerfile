@@ -5,12 +5,10 @@ WORKDIR /app
 
 COPY . .
 
-# Crear carpeta y dar permisos a bootstrap/cache antes del composer install
-RUN mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache
+RUN mkdir -p bootstrap/cache \
+    && composer install --no-dev --optimize-autoloader
 
-RUN composer install --no-dev --optimize-autoloader
-
-# Etapa final: PHP + extensiones necesarias
+# Etapa final
 FROM php:8.2-cli
 
 WORKDIR /app
@@ -22,12 +20,17 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libzip-dev \
     libpng-dev \
-    libjpeg-dev \
+    libonig-dev \
     libxml2-dev \
-    && docker-php-ext-install pdo_mysql zip
+    libicu-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    zlib1g-dev \
+    libxpm-dev \
+    libvpx-dev \
+    libwebp-dev \
+    && docker-php-ext-install pdo_mysql zip intl bcmath gd
 
-# Exponer el puerto
 EXPOSE 8000
 
-# Comando para levantar el servidor Laravel
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
