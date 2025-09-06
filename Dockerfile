@@ -4,16 +4,16 @@
 FROM node:18-alpine AS nodebuild
 WORKDIR /app
 
-# Solo lo necesario para cachear mejor
+# Cacheo de dependencias
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copiamos el resto de archivos necesarios para el build de Vite
+# Archivos de configuración + fuentes
 COPY vite.config.js tailwind.config.js postcss.config.js ./
 COPY resources ./resources
 COPY public ./public
 
-# Compilamos (esto generará public/build y manifest)
+# Compilar Vite (genera public/build y su manifest dentro de esa carpeta)
 RUN npm run build
 
 # -----------------------------
@@ -21,7 +21,7 @@ RUN npm run build
 # -----------------------------
 FROM php:8.2-cli
 
-# Dependencias del sistema + extensiones requeridas por Composer/paquetes
+# Paquetes del sistema + extensiones PHP necesarias
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libicu-dev libpng-dev libjpeg-dev libonig-dev libxml2-dev libfreetype6-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -30,32 +30,28 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copiamos TODO el proyecto
+# Copiamos el proyecto
 COPY . .
 
-# Copiamos los assets construidos en la etapa de Node (ignora .dockerignore)
+# Copiamos solo los assets ya compilados por Vite
 COPY --from=nodebuild /app/public/build /app/public/build
-COPY --from=nodebuild /app/public/manifest.json /app/public/manifest.json
 
-# Si no existe .env aún, crear uno base (el instalador luego lo ajusta)
+# Si no existe .env, crear uno base
 RUN if [ ! -f .env ]; then \
       if [ -f .env.example ]; then cp .env.example .env; \
       else echo -e "APP_NAME=Laravel\nAPP_ENV=production\nAPP_KEY=\nAPP_DEBUG=false\nAPP_URL=http://localhost" > .env; fi \
     ; fi
 
-# Permisos necesarios
+# Permisos y estructura de cache/logs
 RUN mkdir -p bootstrap/cache storage/framework/{cache,sessions,views} storage/logs \
  && chmod -R 775 storage bootstrap/cache
 
-# Instalar Composer y dependencias PHP
+# Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
  && composer install --no-dev --optimize-autoloader
 
-# Generar APP_KEY si está vacío (no rompe si ya existe)
-RUN php -r "file_exists('.env') && preg_match('/^APP_KEY=\\s*$/m', file_get_contents('.env')) ? exit(0) : exit(0);" \
- && php artisan key:generate --force || true
-
-# Crear symlink de storage por si el instalador lo requiere
+# APP_KEY (si hiciera falta) y symlink de storage
+RUN php artisan key:generate --force || true
 RUN php artisan storage:link || true
 
 EXPOSE 8000
