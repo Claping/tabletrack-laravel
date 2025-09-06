@@ -1,0 +1,14 @@
+{
+  "build": {
+    "env": {
+      "COMPOSER_ALLOW_SUPERUSER": "1"
+    },
+    "commands": [
+      "composer install --no-dev --optimize-autoloader",
+      "php artisan config:clear",
+      "php artisan route:cache",
+      "php artisan view:cache"
+    ]
+  },
+  "start": "php artisan serve --host=0.0.0.0 --port=$PORT"
+}
