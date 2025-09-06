@@ -1,36 +1,35 @@
-# Etapa de construcción
-FROM composer:2 as build
-
-WORKDIR /app
-
-COPY . .
-
-RUN mkdir -p bootstrap/cache \
-    && composer install --no-dev --optimize-autoloader
-
-# Etapa final
 FROM php:8.2-cli
 
-WORKDIR /app
-
-COPY --from=build /app /app
-
-# Instalar extensiones necesarias
+# Instalar dependencias del sistema y extensiones de PHP necesarias
 RUN apt-get update && apt-get install -y \
+    git \
     unzip \
     libzip-dev \
+    libicu-dev \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    libicu-dev \
     libjpeg-dev \
     libfreetype6-dev \
-    zlib1g-dev \
-    libxpm-dev \
-    libvpx-dev \
-    libwebp-dev \
-    && docker-php-ext-install pdo_mysql zip intl bcmath gd
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        intl \
+        bcmath \
+        gd \
+        zip \
+        pdo \
+        pdo_mysql \
+        opcache
 
-EXPOSE 8000
+# Configuración adicional
+WORKDIR /app
+COPY . .
+
+# Permisos para Laravel
+RUN mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache
+
+# Instalar dependencias de Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
+    composer install --no-dev --optimize-autoloader
 
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
